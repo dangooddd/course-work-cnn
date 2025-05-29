@@ -1,0 +1,11 @@
+**/.stignore
+**/.stfolder
+**/.venv
+**/build
+**/__pycache__
+checkpoints/
+images/
+gradcam_images/
+logs/
+report/
+weights/
