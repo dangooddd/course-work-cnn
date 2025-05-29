@@ -1,0 +1,11 @@
+seaborn
+jupyter
+pyqt6
+ipython
+ipywidgets
+rich
+tensorboard
+scikit-learn
+grad-cam==1.5.5
+pillow
+numpy
