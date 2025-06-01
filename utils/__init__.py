@@ -28,10 +28,12 @@ def get_model(model_name):
 
 
 def get_last_layer(model, model_name):
-    if model_name in VGG_MODELS:
+    if model_name in VGG_MODELS or model_name in ALEXNET_MODELS:
         return model.features[-1]
     elif model_name in RESNET_MODELS:
         return model.layer4[-1]
+    else:
+        raise ValueError(f"Unknown last layer for {model_name}")
 
 
 def get_transforms():

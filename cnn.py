@@ -9,6 +9,7 @@ from utils import (
     get_last_layer,
     VGG_MODELS,
     RESNET_MODELS,
+    ALEXNET_MODELS,
 )
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.image import show_cam_on_image
@@ -75,7 +76,7 @@ if __name__ == "__main__":
         "-m",
         "--model",
         default="cvgg13",
-        choices=VGG_MODELS + RESNET_MODELS,
+        choices=VGG_MODELS + RESNET_MODELS + ALEXNET_MODELS,
         help="Model to use",
     )
 
