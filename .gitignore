@@ -3,9 +3,6 @@
 **/.venv
 **/build
 **/__pycache__
-checkpoints/
-images/
-gradcam_images/
+data/
 logs/
 report/
-weights/

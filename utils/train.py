@@ -91,7 +91,7 @@ def train(
     writer=None,
     epochs=10,
     start_epoch=0,
-    checkpoint_dir="checkpoints",
+    checkpoint_dir="data/checkpoints",
     checkpoint_step=10,
 ):
     for epoch in track(

@@ -83,7 +83,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     image = Image.open(args.filename)
     model = get_model(args.model).to(args.device)
-    model.load_state_dict(torch.load(f"weights/{args.model}.pt"))
+    model.load_state_dict(torch.load(f"data/weights/{args.model}.pt"))
 
     prediction = run_model(model, args.device, image)[0]
     print(prediction)

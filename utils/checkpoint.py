@@ -3,7 +3,7 @@ import os
 from pathlib import Path
 
 
-def save_weights(model, model_name, dir="weights"):
+def save_weights(model, model_name, dir="data/weights"):
     save_path = Path(dir) / f"{model_name}.pt"
     torch.save(model.state_dict(), save_path)
 
