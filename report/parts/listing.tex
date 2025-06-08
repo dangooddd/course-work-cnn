@@ -1,0 +1,256 @@
+\section*{ПРИЛОЖЕНИЕ А}
+\addcontentsline{toc}{section}{\protect ПРИЛОЖЕНИЕ A}
+
+\lstinputlisting[language=python,caption={Файл utils/\_\_init\_\_.py},label={listing:utils}]{../utils/__init__.py}
+\newpage
+
+\lstinputlisting[language=python,caption={Файл utils/train.py},label={listing:train}]{../utils/train.py}
+\newpage
+
+\lstinputlisting[language=python,caption={Файл utils/checkpoint.py},label={listing:checkpoint}]{../utils/checkpoint.py}
+\newpage
+
+\lstinputlisting[language=python,caption={Файл models/vgg.py},label={listing:vgg}]{../models/vgg.py}
+\newpage
+
+\lstinputlisting[language=python,caption={Файл models/alexnet.py},label={listing:alexnet}]{../models/alexnet.py}
+\newpage
+
+\begin{lstlisting}[language=python, caption={Файл research.ipynb}, label={listing:research}]
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from torch.utils.data import DataLoader, Subset
+    from torch.amp import GradScaler
+    from torch.utils.tensorboard import SummaryWriter
+
+    from torchvision.datasets import ImageFolder
+    from torchvision import transforms
+
+    import numpy as np
+    from sklearn.model_selection import train_test_split
+    from sklearn.utils.class_weight import compute_class_weight
+
+    import logging
+    from utils.train import train
+    from utils.checkpoint import (
+        load_checkpoint,
+        create_checkpoint,
+        save_weights,
+    )
+
+    from utils import get_model
+
+    torch._logging.set_logs(all=logging.ERROR)
+    torch.multiprocessing.set_start_method("spawn", force=True)
+
+    MODEL = "resnet50"
+    BATCH_SIZE = 128
+    EPOCHS = 100
+    SEED = 11
+    LR = 1e-2
+    WEIGHT_DECAY = 1e-4
+    LOAD = True
+    CHECKPOINT_NAME = "checkpoint.pt"
+
+    torch.manual_seed(SEED)
+
+    transform = transforms.Compose(
+        [
+            transforms.Resize((256, 256)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(20),
+            transforms.RandomCrop((224, 224)),
+            transforms.ToTensor(),
+        ]
+    )
+
+    dataset = ImageFolder(
+        "data/images/",
+        transform=transform,
+    )
+
+    class_weight = compute_class_weight(
+        "balanced",
+        classes=np.arange(10),
+        y=dataset.targets,
+    )
+
+    class_weight = torch.tensor(class_weight, dtype=torch.float32)
+
+    train_indices, test_indices = train_test_split(
+        range(len(dataset.targets)),
+        test_size=0.2,
+        stratify=dataset.targets,
+        random_state=SEED,
+    )
+
+    train_dataset = Subset(dataset, train_indices)
+    test_dataset = Subset(dataset, test_indices)
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+        num_workers=4,
+        persistent_workers=True,
+        pin_memory=True,
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=BATCH_SIZE,
+        shuffle=False,
+        num_workers=4,
+        persistent_workers=True,
+        pin_memory=True,
+    )
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = get_model(MODEL).to(device)
+    model.compile(dynamic=False, mode="max-autotune")
+    criterion = nn.CrossEntropyLoss(weight=class_weight.to(device))
+    optimizer = optim.AdamW(
+        model.parameters(),
+        lr=LR,
+        weight_decay=WEIGHT_DECAY,
+    )
+    scheduler = optim.lr_scheduler.MultiStepLR(
+        optimizer,
+        milestones=[30, 60],
+        gamma=0.1,
+    )
+    scaler = GradScaler(device)
+    writer = SummaryWriter(log_dir=f"logs/{MODEL}")
+    epoch = 0
+
+    if LOAD:
+        try:
+            epoch += load_checkpoint(
+                dir=f"data/checkpoints/{MODEL}",
+                model=model,
+                optimizer=optimizer,
+                scaler=scaler,
+                scheduler=scheduler,
+                name=CHECKPOINT_NAME,
+            )
+        except:
+            pass
+
+    epoch = train(
+        model=model,
+        train_loader=train_loader,
+        test_loader=test_loader,
+        device=device,
+        criterion=criterion,
+        optimizer=optimizer,
+        scaler=scaler,
+        scheduler=scheduler,
+        writer=writer,
+        epochs=EPOCHS,
+        start_epoch=epoch,
+        checkpoint_dir=f"data/checkpoints/{MODEL}",
+    )
+
+    create_checkpoint(
+        dir=f"data/checkpoints/{MODEL}",
+        model=model,
+        epoch=epoch,
+        optimizer=optimizer,
+        scaler=scaler,
+        scheduler=scheduler,
+    )
+
+    save_weights(model, MODEL)
+    writer.close()
+\end{lstlisting}
+
+\newpage
+\begin{lstlisting}[language=python, caption={Файл visualize.ipynb}, label={listing:visualize}]
+    import torch
+    import matplotlib.pyplot as plt
+    from PIL import Image
+    from pathlib import Path
+    from utils import get_transforms, get_model, get_last_layer
+    from cnn import run_model, apply_gradcam
+
+    plt.style.use("ggplot")
+
+    MODEL = "alexnet_lrn"
+
+    images_dir = Path("data/gradcam_images/ref")
+    transform = get_transforms()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = get_model(MODEL).to(device)
+    model.load_state_dict(torch.load(f"data/weights/{MODEL}.pt"))
+    layer = get_last_layer(model, MODEL)
+
+    inputs = []
+    outputs = []
+
+
+    for i, path in enumerate(images_dir.iterdir()):
+        image = transform(Image.open(path))
+        label = path.stem
+        inputs.append((image, label))
+
+        gradcam_image = apply_gradcam(model, device, image, layer)
+        prediction = run_model(model, device, image)[0]
+        outputs.append((gradcam_image, prediction))
+
+    def visualize(inputs, outputs):
+        n = len(inputs)
+        fig, axes = plt.subplots(2, n)
+
+        for ax in axes.flat:
+            ax.axis("off")
+
+        for i in range(n):
+            image, label = inputs[i]
+            gradcam_image, prediction = outputs[i]
+
+            axes.flat[i].imshow(image)
+            axes.flat[i].set_title(label)
+            axes.flat[i + n].imshow(gradcam_image)
+            axes.flat[i + n].set_title(prediction)
+
+        axes[0, 0].annotate(
+            "Вход",
+            xy=(-0.3, 0.5),
+            xycoords="axes fraction",
+            rotation=90,
+            va="center",
+            fontsize=12,
+        )
+
+        axes[1, 0].annotate(
+            "Выход",
+            xy=(-0.3, 0.5),
+            xycoords="axes fraction",
+            rotation=90,
+            va="center",
+            fontsize=12,
+        )
+
+        plt.tight_layout()
+        plt.subplots_adjust(hspace=-0.5)
+        plt.show()
+
+    visualize(inputs[:5], outputs[:5])
+
+    visualize(inputs[5:], outputs[5:])
+
+    import polars as pl
+    import seaborn as sns
+
+    test = pl.read_csv(f"data/csv/f1_test_{MODEL}.csv")
+    train = pl.read_csv(f"data/csv/f1_train_{MODEL}.csv")
+
+    sns.lineplot(test, x="Step", y="Value", label="test")
+    sns.lineplot(train, x="Step", y="Value", label="train")
+    plt.title("F1-score")
+    plt.show()
+\end{lstlisting}
+\newpage
+
+\lstinputlisting[language=python,caption={Файл cnn.py},label={cnn}]{../cnn.py}
